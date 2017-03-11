@@ -1,0 +1,19 @@
+Blenderissä objin exporttaaminen:
+
+1. File>Export>Wavefront OBJ
+
+2. Vasemmassa sivupalkissa valitse:
+
+- Apply Modifiers
+- Include edges
+- Write normals
+- Include UVs
+- Write materials
+- Triangulate faces (!!!)
+- Objects as OBJ Objects
+- Objects as OBJ Groups
+- Material Groups
+
+...eikä muita. Säästä tiedosto, profit!
+
+-vurpo
