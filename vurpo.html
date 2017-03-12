@@ -109,13 +109,15 @@
       animate();
 
       function init() {
-        var player = new Modplayer();
-        player.createContext();
-        player.setautostart(true);
-        player.setamigamodel(500);
-        player.load("oispaes.mod");
-        player.repeat = true;
-        //player.play();
+        window.setTimeout(function() {
+          var player = new Modplayer();
+          player.createContext();
+          player.setautostart(true);
+          player.setamigamodel(500);
+          player.load("oispaes.mod");
+          player.repeat = true;
+          //player.play();
+        }, 300);
 
         container = document.createElement( 'div' );
         document.body.appendChild( container );
