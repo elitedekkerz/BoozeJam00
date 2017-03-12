@@ -4,3 +4,6 @@
 [submodule "FlodJS"]
 	path = FlodJS
 	url = https://github.com/photonstorm/FlodJS
+[submodule "webaudio-mod-player"]
+	path = webaudio-mod-player
+	url = https://github.com/jhalme/webaudio-mod-player

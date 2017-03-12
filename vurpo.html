@@ -77,8 +77,15 @@
     <script src="three.js/examples/js/postprocessing/ShaderPass.js"></script>
     <script src="three.js/examples/js/postprocessing/MaskPass.js"></script>
 
+    <script src="webaudio-mod-player/js/player.js"></script>
+    <script src="webaudio-mod-player/js/st3.js"></script>
+    <script src="webaudio-mod-player/js/pt.js"></script>
+    <script src="webaudio-mod-player/js/ft2.js"></script>
+    <script src="webaudio-mod-player/js/utils.js"></script>
+
     <script>
 
+      
       if (!Detector.webgl) Detector.addGetWebGLMessage();
 
 
@@ -102,6 +109,13 @@
       animate();
 
       function init() {
+        var player = new Modplayer();
+        player.createContext();
+        player.setautostart(true);
+        player.setamigamodel(500);
+        player.load("oispaes.mod");
+        player.repeat = true;
+        //player.play();
 
         container = document.createElement( 'div' );
         document.body.appendChild( container );
