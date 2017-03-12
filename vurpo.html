@@ -84,10 +84,8 @@
     <script src="webaudio-mod-player/js/utils.js"></script>
 
     <script>
-
       
       if (!Detector.webgl) Detector.addGetWebGLMessage();
-
 
       // Initialise variables
       var depthMaterial, effectComposer, depthRenderTarget;
@@ -99,16 +97,87 @@
 
       var container;
 
-      var camera, controls, cameraTarget, scene, renderer;
+      var camera, controls, cameraTarget, renderer;
 
-      // For hiding the ground plane
-      var ground_visible = true;
-      var ground_animating = false;
+      var preloadedObjects = {};
+      var demoOrchestration = {
+        scenes: [
+          {
+            duration: 10000,
+            scene: new THREE.Scene(),
+            onStart: function() {
+              var scene = this.scene;
+              var fogColor = {r: 0, g: 0, b: 0};
+              var fogTween = new TWEEN.Tween(fogColor)
+                .to({r: 0.5, g: 0.4, b: 0.2}, 2000)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .onUpdate(function() {
+                  renderer.setClearColor( new THREE.Color(fogColor.r, fogColor.g, fogColor.b) );
+                })
+                .delay(1000)
+                .start();
 
-      init();
+              plane_material = new THREE.MeshPhongMaterial( { color: 0x666666, specular: 0xffffff,  opacity: 1.0, transparent: true, shininess: 100 } );
+
+              var plane = new THREE.Mesh(new THREE.PlaneBufferGeometry( 4, 4 ), plane_material);
+              plane.rotation.x = -Math.PI/2;
+              plane.position.y = -1;
+              this.scene.add( plane );
+
+              plane.receiveShadow = true;
+
+              window.setTimeout(function() {
+                var spotLight = new THREE.SpotLight( 0xddddff, 5, 10, Math.PI/8, 0.5 );
+                spotLight.position.set(0, 2, -2.5);
+                spotLight.target.position.set(0,0,-0.5);
+
+                spotLight.castShadow = true;
+
+                spotLight.shadow.mapSize.width = 1024;
+                spotLight.shadow.mapSize.height = 1024;
+
+                spotLight.shadow.camera.near = 500;
+                spotLight.shadow.camera.far = 4000;
+                spotLight.shadow.camera.fov = 30;
+
+                scene.add(spotLight.target);
+                scene.add(spotLight);
+
+              }, 3000);
+
+              scene.add(preloadedObjects.jallu);
+              scene.add(preloadedObjects.skull);
+
+              var skullCoords = {y:7};
+              var tween = new TWEEN.Tween(skullCoords)
+                .to({y: -0.5}, 6000)
+                .onUpdate(function(){
+                  preloadedObjects.skull.position.y = skullCoords.y;
+                })
+                .easing(TWEEN.Easing.Quadratic.InOut)
+                .delay(4000)
+                .start();
+              var jalluCoords = {y:3};
+              var tween = new TWEEN.Tween(jalluCoords)
+                .to({y: -1}, 1300)
+                .onUpdate(function(){
+                  preloadedObjects.jallu.position.y = jalluCoords.y;
+                })
+                .easing(TWEEN.Easing.Bounce.Out)
+                .delay(3600)
+                .start();
+            },
+            onEnd: function() {
+            }
+          }
+        ]
+      };
+      var currentScene = 0;
+              
+      preload();
       animate();
 
-      function init() {
+      function preload() {
         window.setTimeout(function() {
           var player = new Modplayer();
           player.createContext();
@@ -130,109 +199,86 @@
 
         scene = new THREE.Scene();
 
-        scene.fog = new THREE.Fog( new THREE.Color(0,0,0), 10, 30 );
-        var fogColor = {r: 0, g: 0, b: 0};
-        var fogTween = new TWEEN.Tween(fogColor)
-          .to({r: 0.5, g: 0.4, b: 0.2}, 2000)
-          .easing(TWEEN.Easing.Cubic.Out)
-          .onUpdate(function(){
-            scene.fog.color.fromArray([fogColor.r, fogColor.g, fogColor.b]);
-            renderer.setClearColor( scene.fog.color );
-          })
-          .delay(1000)
-          .start();
 
         // Ground plane
-        plane_material = new THREE.MeshPhongMaterial( { color: 0x666666, specular: 0xffffff,  opacity: 1.0, transparent: true, shininess: 100 } );
-
-        var plane = new THREE.Mesh(new THREE.PlaneBufferGeometry( 4, 4 ), plane_material);
-        plane.rotation.x = -Math.PI/2;
-        plane.position.y = -1;
-        scene.add( plane );
-
-        plane.receiveShadow = true;
 
         var material = new THREE.MeshPhongMaterial( { color: 0x909090, specular: 0x333333, shininess: 20 } );
 
         var lazerBeamMaterial = new THREE.MeshBasicMaterial( { color: 0xFFAA00, transparent: true, opacity: 0.5 } );
-        var textMaterial = new THREE.MeshPhongMaterial( { color: 0x0044FF, specular: 0xFFFFFF, shininess: 100} );
+        var textMaterial = new THREE.MeshPhongMaterial( { color: 0x0044FF, specular: 0xFFFFFF, shininess: 100, emissive: 100} );
         var skullMaterial = new THREE.MeshBasicMaterial( { color: 0x00FF00 } );
         var gogglesMaterial = new THREE.MeshPhongMaterial( { color: 0x040404, specular: 0xFFFFFF, shininess: 50} );
 
         var manager = new THREE.LoadingManager();
 
+        var objLoader = new THREE.OBJLoader( manager );
         var mtlLoader = new THREE.MTLLoader( manager ); 
+        var objectLoader = new THREE.ObjectLoader( manager );
+
+        function objectLoaderAsync(url) {
+          return new Promise(function(resolve, reject) {
+            objectLoader.load(url, resolve, function(){}, reject);
+          });
+        };
+        function OBJLoadAsync(url) {
+          return new Promise(function(resolve, reject) {
+            objLoader.load(url, resolve, function(){}, reject);
+          });
+        };
+        function MTLLoadAsync(url) {
+          return new Promise(function(resolve, reject) {
+            mtlLoader.load(url, resolve, function(){}, reject);
+          });
+        };
+
+        var assetPromises = [];
+
+        assetPromises.push(objectLoaderAsync('assets/jaloviina.json')
+          .then(function (object) {
+            object.name = "jaloviina";
+            object.position.y = 3;
+            object.position.z = 0.5;
+            object.scale.set(0.3,0.3,0.3);
+            preloadedObjects.jallu = object;
+          }));
+
         mtlLoader.setPath('assets/');
         mtlLoader.setTexturePath('assets/');
         mtlLoader.setMaterialOptions({side: THREE.DoubleSide });
-
-        var objLoader = new THREE.OBJLoader( manager );
-        mtlLoader.load( 'elite-TRIANGULATED.mtl', function(materials) {
-          materials.preload();
-          objLoader.setMaterials(materials);
-        });
-
-        objLoader.load( 'assets/elite-TRIANGULATED.obj', function(object) {
-          object.traverse(function(child){
-            if(child instanceof THREE.Mesh) {
-              if (child.name == "Jvision_Cylinder.001_Jvision_Cylinder.001_Material.001") {
-                child.material = lazerBeamMaterial;
-              } else if (child.name == "Text_Elite_Text_Elite_Material.003") {
-                child.material = textMaterial;
-              } else if (child.name == "Skull_Cube.002_Skull_Cube.002_Material.002") {
-                child.material = skullMaterial;
-              } else if (child.name == "zoomies_Cube_zoomies_Cube_Material.004") {
-                child.material = gogglesMaterial;
+        assetPromises.push(MTLLoadAsync( 'elite-TRIANGULATED.mtl')
+          .then(function(materials) {
+            materials.preload();
+            objLoader.setMaterials(materials);
+          }));
+        assetPromises.push(OBJLoadAsync( 'assets/elite-TRIANGULATED.obj')
+          .then(function(object) {
+            object.traverse(function(child){
+              if(child instanceof THREE.Mesh) {
+                if (child.name == "Jvision_Cylinder.001_Jvision_Cylinder.001_Material.001") {
+                  child.material = lazerBeamMaterial;
+                } else if (child.name == "Text_Elite_Text_Elite_Material.003") {
+                  child.material = textMaterial;
+                } else if (child.name == "Skull_Cube.002_Skull_Cube.002_Material.002") {
+                  child.material = skullMaterial;
+                } else if (child.name == "zoomies_Cube_zoomies_Cube_Material.004") {
+                  child.material = gogglesMaterial;
+                }
               }
-            }
-          });
-          object.position.y = 0.4;
-          var scale = 0.5;
-          object.scale.set( scale, scale, scale );
-          //scene.add( object );
-        });
-
-        var jsonLoader = new THREE.ObjectLoader( manager );
-        jsonLoader.load('assets/jaloviina.json', function (object) {
-          object.position.y = 3;
-          object.position.z = 0.5;
-          object.scale.set(0.3,0.3,0.3);
-          scene.add(object);
-          var coords = {y:3};
-          var tween = new TWEEN.Tween(coords)
-            .to({y: -1}, 1300)
-            .onUpdate(function(){
-              object.position.y = coords.y;
-            })
-            .easing(TWEEN.Easing.Bounce.Out)
-            .delay(3600)
-            .start();
-        });
+            });
+            object.elapsedTime = 0;
+            object.position.y = 7;
+            object.position.z = -3;
+            var scale = 0.3;
+            object.scale.set( scale, scale, scale );
+            object.name = "skull";
+            preloadedObjects.skull = object;
+          }));
 
         // Lights
 
-        window.setTimeout(function() {
-          var spotLight = new THREE.SpotLight( 0xddddff, 5, 10, Math.PI/8, 0.5 );
-          spotLight.position.set(0, 2, -2.5);
-          spotLight.target.position.set(0,0,-0.5);
-
-          spotLight.castShadow = true;
-
-          spotLight.shadow.mapSize.width = 1024;
-          spotLight.shadow.mapSize.height = 1024;
-
-          spotLight.shadow.camera.near = 500;
-          spotLight.shadow.camera.far = 4000;
-          spotLight.shadow.camera.fov = 30;
-
-          scene.add(spotLight.target);
-          scene.add(spotLight);
-
-        }, 3000);
-
         // Renderer
         renderer = new THREE.WebGLRenderer( { antialias: true } );
-        renderer.setClearColor( scene.fog.color );
+        //renderer.setClearColor( scene.fog.color );
         renderer.setPixelRatio( window.devicePixelRatio );
         renderer.setSize( window.innerWidth, window.innerHeight );
 
@@ -256,6 +302,9 @@
         // Resize event
         window.addEventListener( 'resize', onWindowResize, false );
 
+        Promise.all(assetPromises).then(function() {
+          demoOrchestration.scenes[0].onStart();
+        });
       }
 
       function renderModeChange( value ) {
@@ -272,30 +321,6 @@
           console.error( "Not define renderModeChange type: " + value );
 
         }
-
-      }
-
-      function addShadowedLight( x, y, z, color, intensity ) {
-
-        var directionalLight = new THREE.DirectionalLight( color, intensity );
-        directionalLight.position.set( x, y, z );
-        scene.add( directionalLight );
-
-        directionalLight.castShadow = true;
-
-        var d = 1;
-        directionalLight.shadow.camera.left = -d;
-        directionalLight.shadow.camera.right = d;
-        directionalLight.shadow.camera.top = d;
-        directionalLight.shadow.camera.bottom = -d;
-
-        directionalLight.shadow.camera.near = 0.1;
-        directionalLight.shadow.camera.far = 10;
-
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-
-        directionalLight.shadow.bias = -0.002;
 
       }
 
@@ -324,7 +349,7 @@
       function initPostprocessing() {
 
         // Setup render pass
-        var renderPass = new THREE.RenderPass( scene, camera );
+        var renderPass = new THREE.RenderPass( demoOrchestration.scenes[0].scene, camera );
         renderPass.renderToScreen = true;
 
         // Setup depth pass
@@ -367,40 +392,24 @@
 
         var position, target;
 
-        //Hide and show the ground plane based on camera's vertical position
-        if(ground_visible === true && camera.position.y < 0.3 ) {
-          ground_visible = false;
-          console.log('Hiding.');
-
-          var variables = { opacity: 1 };
-          var tween = new TWEEN.Tween(variables)
-            .to({ opacity: 0 }, 300)
-            .onUpdate(function() {
-                plane_material.opacity = this.opacity;
-            })
-            .start();
-
-        } else if(ground_visible === false && camera.position.y > 0.3 ) {
-          ground_visible = true;
-          console.log('Showing.');
-          var variables = { opacity: 0 };
-          var tween = new TWEEN.Tween(variables)
-            .to({ opacity: 1 }, 300)
-            .onUpdate(function() {
-                plane_material.opacity = this.opacity;
-            })
-            .start();
-
+        let skull = demoOrchestration.scenes[0].scene.getObjectByName("skull");
+        let jallu = demoOrchestration.scenes[0].scene.getObjectByName("jaloviina");
+        if (skull && jallu) {
+          skull.elapsedTime += 0.02;
+          skull.position.x = jallu.position.x + 3*Math.cos(skull.elapsedTime);
+          skull.position.z = jallu.position.z + 3*Math.sin(skull.elapsedTime);
+          skull.lookAt(new THREE.Vector3(0,Math.cos(skull.elapsedTime)*0.5-0.5,0.5));
         }
 
-        TWEEN.update();
 
-        controls.update();
+        TWEEN.update();
 
         render();
       }
 
       function render() {
+        var scene = demoOrchestration.scenes[0].scene;
+
         var timer = Date.now() * 0.0005;
         camera.lookAt( cameraTarget );
 
