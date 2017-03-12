@@ -98,6 +98,7 @@
       var container;
 
       var camera, controls, cameraTarget, renderer;
+      var lastTrackerRow, trackerRow;
 
       var preloadedObjects = {};
       var demoOrchestration = {
@@ -148,6 +149,21 @@
               scene.add(preloadedObjects.jallu);
               scene.add(preloadedObjects.skull);
 
+              var lastTrackerRow = trackerRow;
+              window.setInterval(function() {
+                if (lastTrackerRow != trackerRow && trackerRow%4 == 0) {
+                  lastTrackerRow = trackerRow;
+                  var laserIntensity = {x: 1};
+                  var tween = new TWEEN.Tween(laserIntensity)
+                    .to({x:0}, 400)
+                    .onUpdate(function(){
+                      preloadedObjects.skull.getObjectByName("Jvision_Cylinder.001_Jvision_Cylinder.001_Material.001")
+                        .material.opacity = laserIntensity.x;
+                    })
+                    .start()
+                }
+              }, 10);
+
               var skullCoords = {y:7};
               var tween = new TWEEN.Tween(skullCoords)
                 .to({y: -0.5}, 6000)
@@ -167,6 +183,16 @@
                 .delay(3600)
                 .start();
             },
+            animate: function() {
+              let skull = demoOrchestration.scenes[0].scene.getObjectByName("skull");
+              let jallu = demoOrchestration.scenes[0].scene.getObjectByName("jaloviina");
+              if (skull && jallu) {
+                skull.elapsedTime += 0.02;
+                skull.position.x = jallu.position.x + 3*Math.cos(skull.elapsedTime);
+                skull.position.z = jallu.position.z + 3*Math.sin(skull.elapsedTime);
+                skull.lookAt(new THREE.Vector3(0,Math.cos(skull.elapsedTime)*0.5-0.5,0.5));
+              }
+            },
             onEnd: function() {
             }
           }
@@ -177,6 +203,8 @@
       preload();
       animate();
 
+
+
       function preload() {
         window.setTimeout(function() {
           var player = new Modplayer();
@@ -185,6 +213,13 @@
           player.setamigamodel(500);
           player.load("oispaes.mod");
           player.repeat = true;
+          window.setInterval(function() {
+            lastTrackerRow = trackerRow;
+            trackerRow = player.player.row;
+            //if (trackerRow != lastTrackerRow) {
+            //  console.log(player.player.row);
+            //}
+          }, 1);
           //player.play();
         }, 300);
 
@@ -392,16 +427,7 @@
 
         var position, target;
 
-        let skull = demoOrchestration.scenes[0].scene.getObjectByName("skull");
-        let jallu = demoOrchestration.scenes[0].scene.getObjectByName("jaloviina");
-        if (skull && jallu) {
-          skull.elapsedTime += 0.02;
-          skull.position.x = jallu.position.x + 3*Math.cos(skull.elapsedTime);
-          skull.position.z = jallu.position.z + 3*Math.sin(skull.elapsedTime);
-          skull.lookAt(new THREE.Vector3(0,Math.cos(skull.elapsedTime)*0.5-0.5,0.5));
-        }
-
-
+        demoOrchestration.scenes[currentScene].animate();
         TWEEN.update();
 
         render();
