@@ -114,7 +114,17 @@
 
         scene = new THREE.Scene();
 
-        scene.fog = new THREE.Fog( 0x443311, 10, 30 );
+        scene.fog = new THREE.Fog( new THREE.Color(0,0,0), 10, 30 );
+        var fogColor = {r: 0, g: 0, b: 0};
+        var fogTween = new TWEEN.Tween(fogColor)
+          .to({r: 0.5, g: 0.4, b: 0.2}, 2000)
+          .easing(TWEEN.Easing.Cubic.Out)
+          .onUpdate(function(){
+            scene.fog.color.fromArray([fogColor.r, fogColor.g, fogColor.b]);
+            renderer.setClearColor( scene.fog.color );
+          })
+          .delay(1000)
+          .start();
 
         // Ground plane
         plane_material = new THREE.MeshPhongMaterial( { color: 0x666666, specular: 0xffffff,  opacity: 1.0, transparent: true, shininess: 100 } );
@@ -169,6 +179,7 @@
         var jsonLoader = new THREE.ObjectLoader( manager );
         jsonLoader.load('assets/jaloviina.json', function (object) {
           object.position.y = 3;
+          object.position.z = 0.5;
           object.scale.set(0.3,0.3,0.3);
           scene.add(object);
           var coords = {y:3};
@@ -178,14 +189,30 @@
               object.position.y = coords.y;
             })
             .easing(TWEEN.Easing.Bounce.Out)
-            .delay(1000)
+            .delay(3600)
             .start();
         });
 
         // Lights
-        scene.add( new THREE.HemisphereLight( 0x535359, 0x111122 ) );
 
-        addShadowedLight( 0, 1.0, -1, 0xeeeeff, 5 );
+        window.setTimeout(function() {
+          var spotLight = new THREE.SpotLight( 0xddddff, 5, 10, Math.PI/8, 0.5 );
+          spotLight.position.set(0, 2, -2.5);
+          spotLight.target.position.set(0,0,-0.5);
+
+          spotLight.castShadow = true;
+
+          spotLight.shadow.mapSize.width = 1024;
+          spotLight.shadow.mapSize.height = 1024;
+
+          spotLight.shadow.camera.near = 500;
+          spotLight.shadow.camera.far = 4000;
+          spotLight.shadow.camera.fov = 30;
+
+          scene.add(spotLight.target);
+          scene.add(spotLight);
+
+        }, 3000);
 
         // Renderer
         renderer = new THREE.WebGLRenderer( { antialias: true } );
