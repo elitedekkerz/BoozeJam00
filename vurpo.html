@@ -84,10 +84,8 @@
     <script src="webaudio-mod-player/js/utils.js"></script>
 
     <script>
-
       
       if (!Detector.webgl) Detector.addGetWebGLMessage();
-
 
       // Initialise variables
       var depthMaterial, effectComposer, depthRenderTarget;
@@ -99,25 +97,165 @@
 
       var container;
 
-      var camera, controls, cameraTarget, scene, renderer;
+      var camera, controls, cameraTarget, renderer;
+      var trackerRow;
+      var tracker;
 
-      // For hiding the ground plane
-      var ground_visible = true;
-      var ground_animating = false;
+      var preloadedObjects = {};
+      var demoOrchestration = {
+        scenes: [
+          {
+            duration: 10000,
+            scene: new THREE.Scene(),
+            onStart: function() {
+              window.setTimeout(function() {
+                tracker.load("oispaes.mod");
+              }, 300);
 
-      init();
+              var scene = this.scene;
+              var fogColor = {r: 0, g: 0, b: 0};
+              var fogTween = new TWEEN.Tween(fogColor)
+                .to({r: 0.5, g: 0.4, b: 0.2}, 2000)
+                .easing(TWEEN.Easing.Cubic.Out)
+                .onUpdate(function() {
+                  renderer.setClearColor( new THREE.Color(fogColor.r, fogColor.g, fogColor.b) );
+                })
+                .delay(1000)
+                .start();
+
+              plane_material = new THREE.MeshPhongMaterial( { color: 0x666666, specular: 0xffffff,  opacity: 1.0, transparent: true, shininess: 100 } );
+
+              var plane = new THREE.Mesh(new THREE.PlaneBufferGeometry( 4, 4 ), plane_material);
+              plane.rotation.x = -Math.PI/2;
+              plane.position.y = -1;
+              this.scene.add( plane );
+
+              plane.receiveShadow = true;
+
+              window.setTimeout(function() {
+                scene.getObjectByName("spot1").power = 3*Math.PI;
+                scene.getObjectByName("spot2").power = 3*Math.PI;
+              }, 3000);
+
+              scene.add(preloadedObjects.jallu);
+              scene.add(preloadedObjects.skull);
+
+              var lastTrackerRow = trackerRow;
+              var beatInterval = window.setInterval(function() {
+                if (lastTrackerRow != trackerRow && trackerRow%4 == 0) {
+                  lastTrackerRow = trackerRow;
+                  var laserIntensity = {x: 1};
+                  var tween = new TWEEN.Tween(laserIntensity)
+                    .to({x:0}, 400)
+                    .onUpdate(function(){
+                      preloadedObjects.skull.getObjectByName("Jvision_Cylinder.001_Jvision_Cylinder.001_Material.001")
+                        .material.opacity = laserIntensity.x;
+                    })
+                    .start()
+                }
+              }, 10);
+
+              var skullCoords = {y:7};
+              var tween = new TWEEN.Tween(skullCoords)
+                .to({y: -0.5}, 6000)
+                .onUpdate(function(){
+                  preloadedObjects.skull.position.y = skullCoords.y;
+                })
+                .easing(TWEEN.Easing.Quadratic.InOut)
+                .delay(4000)
+                .start();
+
+              var skullRotation = {x: 0};
+              var cameraTween = {
+                posx: camera.position.x, posy: camera.position.y, posz: camera.position.z,
+              };
+              var l1 = scene.getObjectByName("spot1");
+              var l2 = scene.getObjectByName("spot2");
+              var lightsColor = {
+                r1:l1.color.r, g1:l1.color.g, b1:l1.color.b,
+                r2:l2.color.r, g2:l2.color.g, b2:l2.color.b,
+                power:3*Math.PI
+              };
+              var tween = new TWEEN.Tween(skullRotation) //this one rotates the skull
+                .to({x: Math.PI*8-Math.PI/2}, 17000)
+                .onUpdate(function() {
+                  preloadedObjects.skull.elapsedTime = skullRotation.x;
+                })
+                .easing(TWEEN.Easing.Sinusoidal.Out)
+                .delay(2000)
+                .chain(
+                    new TWEEN.Tween(cameraTween) //this tween moves the camera into the skull
+                      .to({
+                        posx:0, posy:-0.4, posz:-3.5,
+                      }, 2000)
+                      .onUpdate(function() {
+                        camera.position.set(cameraTween.posx, cameraTween.posy, cameraTween.posz);
+                      })
+                      .easing(TWEEN.Easing.Quadratic.InOut)
+                      .onStart(function() {
+                        window.setInterval(function() {
+                          window.clearInterval(beatInterval); //stop the lazers flashing
+                          preloadedObjects.skull.getObjectByName("Jvision_Cylinder.001_Jvision_Cylinder.001_Material.001").visible = false;
+                        },1200);
+                      }),
+                    new TWEEN.Tween(lightsColor) //change the color of the lights (fake jalovisio)
+                      .to({
+                        r1: 1.0, g1: 0.7, b1: 0.0,
+                        r2: 1.0, g2: 0.7, b2: 0.0,
+                        power:8*Math.PI
+                      }, 500)
+                      .onUpdate(function() {
+                        l1.color.setRGB(lightsColor.r1, lightsColor.g1, lightsColor.b1);
+                        l2.color.setRGB(lightsColor.r2, lightsColor.g2, lightsColor.b2);
+                        l1.power = lightsColor.power;
+                        l2.power = lightsColor.power;
+                      })
+                      .delay(1400)
+                )
+                .start();
+
+              var jalluCoords = {y:2.5};
+              var tween = new TWEEN.Tween(jalluCoords)
+                .to({y: -1}, 1800)
+                .onUpdate(function(){
+                  preloadedObjects.jallu.position.y = jalluCoords.y;
+                })
+                .easing(TWEEN.Easing.Bounce.Out)
+                .delay(3600)
+                .start();
+            },
+            animate: function() {
+              let skull = this.scene.getObjectByName("skull");
+              let jallu = this.scene.getObjectByName("jaloviina");
+              if (skull && jallu) {
+                //skull.elapsedTime += 0.02;
+                skull.position.x = jallu.position.x + 3*Math.cos(skull.elapsedTime);
+                skull.position.z = jallu.position.z + 3*Math.sin(skull.elapsedTime);
+                skull.lookAt(new THREE.Vector3(0,Math.cos(skull.elapsedTime)*0.5-0.5,0));
+              }
+            },
+            onEnd: function() {
+            }
+          }
+        ]
+      };
+      var currentScene = 0;
+              
+      preload();
       animate();
 
-      function init() {
-        window.setTimeout(function() {
-          var player = new Modplayer();
-          player.createContext();
-          player.setautostart(true);
-          player.setamigamodel(500);
-          player.load("oispaes.mod");
-          player.repeat = true;
-          //player.play();
-        }, 300);
+
+
+      function preload() {
+        tracker = new Modplayer();
+        tracker.createContext();
+        tracker.player = new Protracker();
+        tracker.setamigamodel(500);
+        tracker.setautostart(true);
+        tracker.repeat = true;
+        window.setInterval(function() {
+          trackerRow = tracker.player.row;
+        }, 1);
 
         container = document.createElement( 'div' );
         document.body.appendChild( container );
@@ -128,111 +266,117 @@
         // Where to look
         cameraTarget = new THREE.Vector3( 0, 0, 0 );
 
-        scene = new THREE.Scene();
-
-        scene.fog = new THREE.Fog( new THREE.Color(0,0,0), 10, 30 );
-        var fogColor = {r: 0, g: 0, b: 0};
-        var fogTween = new TWEEN.Tween(fogColor)
-          .to({r: 0.5, g: 0.4, b: 0.2}, 2000)
-          .easing(TWEEN.Easing.Cubic.Out)
-          .onUpdate(function(){
-            scene.fog.color.fromArray([fogColor.r, fogColor.g, fogColor.b]);
-            renderer.setClearColor( scene.fog.color );
-          })
-          .delay(1000)
-          .start();
-
-        // Ground plane
-        plane_material = new THREE.MeshPhongMaterial( { color: 0x666666, specular: 0xffffff,  opacity: 1.0, transparent: true, shininess: 100 } );
-
-        var plane = new THREE.Mesh(new THREE.PlaneBufferGeometry( 4, 4 ), plane_material);
-        plane.rotation.x = -Math.PI/2;
-        plane.position.y = -1;
-        scene.add( plane );
-
-        plane.receiveShadow = true;
-
         var material = new THREE.MeshPhongMaterial( { color: 0x909090, specular: 0x333333, shininess: 20 } );
 
         var lazerBeamMaterial = new THREE.MeshBasicMaterial( { color: 0xFFAA00, transparent: true, opacity: 0.5 } );
-        var textMaterial = new THREE.MeshPhongMaterial( { color: 0x0044FF, specular: 0xFFFFFF, shininess: 100} );
+        var textMaterial = new THREE.MeshPhongMaterial( { color: 0x8888FF, specular: 0xFFFFFF, shininess: 100, emissive: 200} );
         var skullMaterial = new THREE.MeshBasicMaterial( { color: 0x00FF00 } );
-        var gogglesMaterial = new THREE.MeshPhongMaterial( { color: 0x040404, specular: 0xFFFFFF, shininess: 50} );
+        var gogglesMaterial = new THREE.MeshBasicMaterial( { color: 0xEE00EE, transparent: true, opacity: 0.8 } );
 
         var manager = new THREE.LoadingManager();
 
+        var objLoader = new THREE.OBJLoader( manager );
         var mtlLoader = new THREE.MTLLoader( manager ); 
+        var objectLoader = new THREE.ObjectLoader( manager );
+
+        function objectLoaderAsync(url) {
+          return new Promise(function(resolve, reject) {
+            objectLoader.load(url, resolve, function(){}, reject);
+          });
+        };
+        function OBJLoadAsync(url) {
+          return new Promise(function(resolve, reject) {
+            objLoader.load(url, resolve, function(){}, reject);
+          });
+        };
+        function MTLLoadAsync(url) {
+          return new Promise(function(resolve, reject) {
+            mtlLoader.load(url, resolve, function(){}, reject);
+          });
+        };
+
+        var assetPromises = [];
+
+        assetPromises.push(objectLoaderAsync('assets/jaloviina.json')
+          .then(function (object) {
+            object.name = "jaloviina";
+            object.position.set(0,3,0);
+            object.scale.set(0.3,0.3,0.3);
+            preloadedObjects.jallu = object;
+          }));
+
         mtlLoader.setPath('assets/');
         mtlLoader.setTexturePath('assets/');
         mtlLoader.setMaterialOptions({side: THREE.DoubleSide });
-
-        var objLoader = new THREE.OBJLoader( manager );
-        mtlLoader.load( 'elite-TRIANGULATED.mtl', function(materials) {
-          materials.preload();
-          objLoader.setMaterials(materials);
-        });
-
-        objLoader.load( 'assets/elite-TRIANGULATED.obj', function(object) {
-          object.traverse(function(child){
-            if(child instanceof THREE.Mesh) {
-              if (child.name == "Jvision_Cylinder.001_Jvision_Cylinder.001_Material.001") {
-                child.material = lazerBeamMaterial;
-              } else if (child.name == "Text_Elite_Text_Elite_Material.003") {
-                child.material = textMaterial;
-              } else if (child.name == "Skull_Cube.002_Skull_Cube.002_Material.002") {
-                child.material = skullMaterial;
-              } else if (child.name == "zoomies_Cube_zoomies_Cube_Material.004") {
-                child.material = gogglesMaterial;
+        assetPromises.push(MTLLoadAsync( 'elite-TRIANGULATED.mtl')
+          .then(function(materials) {
+            materials.preload();
+            objLoader.setMaterials(materials);
+          }));
+        assetPromises.push(OBJLoadAsync( 'assets/elite-TRIANGULATED.obj')
+          .then(function(object) {
+            object.traverse(function(child){
+              if(child instanceof THREE.Mesh) {
+                if (child.name == "Jvision_Cylinder.001_Jvision_Cylinder.001_Material.001") {
+                  child.material = lazerBeamMaterial;
+                  child.renderOrder = 1;
+                } else if (child.name == "Text_Elite_Text_Elite_Material.003") {
+                  child.material = textMaterial;
+                } else if (child.name == "Skull_Cube.002_Skull_Cube.002_Material.002") {
+                  child.material = skullMaterial;
+                } else if (child.name == "zoomies_Cube_zoomies_Cube_Material.004") {
+                  child.material = gogglesMaterial;
+                }
               }
-            }
-          });
-          object.position.y = 0.4;
-          var scale = 0.5;
-          object.scale.set( scale, scale, scale );
-          //scene.add( object );
-        });
+            });
+            object.elapsedTime = 0;
+            object.position.y = 7;
+            object.position.z = -3;
+            var scale = 0.3;
+            object.scale.set( scale, scale, scale );
+            object.name = "skull";
+            preloadedObjects.skull = object;
+          }));
+        
+        assetPromises.push(new Promise(function(resolve, reject) {
+          var spotLight1 = new THREE.SpotLight( 0xbbFFbb, 0, 10, Math.PI/8, 0.2 );
+          spotLight1.name = "spot1";
+          spotLight1.position.set(1, 2, -1.5);
+          spotLight1.target.position.set(-0.2,-1,0.5);
 
-        var jsonLoader = new THREE.ObjectLoader( manager );
-        jsonLoader.load('assets/jaloviina.json', function (object) {
-          object.position.y = 3;
-          object.position.z = 0.5;
-          object.scale.set(0.3,0.3,0.3);
-          scene.add(object);
-          var coords = {y:3};
-          var tween = new TWEEN.Tween(coords)
-            .to({y: -1}, 1300)
-            .onUpdate(function(){
-              object.position.y = coords.y;
-            })
-            .easing(TWEEN.Easing.Bounce.Out)
-            .delay(3600)
-            .start();
-        });
+          spotLight1.castShadow = true;
 
-        // Lights
+          spotLight1.shadow.mapSize.width = 1024;
+          spotLight1.shadow.mapSize.height = 1024;
 
-        window.setTimeout(function() {
-          var spotLight = new THREE.SpotLight( 0xddddff, 5, 10, Math.PI/8, 0.5 );
-          spotLight.position.set(0, 2, -2.5);
-          spotLight.target.position.set(0,0,-0.5);
+          spotLight1.shadow.camera.near = 500;
+          spotLight1.shadow.camera.far = 4000;
+          spotLight1.shadow.camera.fov = 30;
 
-          spotLight.castShadow = true;
+          demoOrchestration.scenes[0].scene.add(spotLight1.target);
+          demoOrchestration.scenes[0].scene.add(spotLight1);
 
-          spotLight.shadow.mapSize.width = 1024;
-          spotLight.shadow.mapSize.height = 1024;
+          var spotLight2 = new THREE.SpotLight( 0xFFbbFF, 0, 10, Math.PI/8, 0.2 );
+          spotLight2.name = "spot2";
+          spotLight2.position.set(-1, 2, -1.5);
+          spotLight2.target.position.set(0.2,-1,0.5);
 
-          spotLight.shadow.camera.near = 500;
-          spotLight.shadow.camera.far = 4000;
-          spotLight.shadow.camera.fov = 30;
+          spotLight2.castShadow = true;
 
-          scene.add(spotLight.target);
-          scene.add(spotLight);
+          spotLight2.shadow.mapSize.width = 1024;
+          spotLight2.shadow.mapSize.height = 1024;
 
-        }, 3000);
+          spotLight2.shadow.camera.near = 500;
+          spotLight2.shadow.camera.far = 4000;
+          spotLight2.shadow.camera.fov = 30;
+
+          demoOrchestration.scenes[0].scene.add(spotLight2.target);
+          demoOrchestration.scenes[0].scene.add(spotLight2);
+          resolve();
+        }));
 
         // Renderer
         renderer = new THREE.WebGLRenderer( { antialias: true } );
-        renderer.setClearColor( scene.fog.color );
         renderer.setPixelRatio( window.devicePixelRatio );
         renderer.setSize( window.innerWidth, window.innerHeight );
 
@@ -256,6 +400,9 @@
         // Resize event
         window.addEventListener( 'resize', onWindowResize, false );
 
+        Promise.all(assetPromises).then(function() {
+          demoOrchestration.scenes[0].onStart();
+        });
       }
 
       function renderModeChange( value ) {
@@ -272,30 +419,6 @@
           console.error( "Not define renderModeChange type: " + value );
 
         }
-
-      }
-
-      function addShadowedLight( x, y, z, color, intensity ) {
-
-        var directionalLight = new THREE.DirectionalLight( color, intensity );
-        directionalLight.position.set( x, y, z );
-        scene.add( directionalLight );
-
-        directionalLight.castShadow = true;
-
-        var d = 1;
-        directionalLight.shadow.camera.left = -d;
-        directionalLight.shadow.camera.right = d;
-        directionalLight.shadow.camera.top = d;
-        directionalLight.shadow.camera.bottom = -d;
-
-        directionalLight.shadow.camera.near = 0.1;
-        directionalLight.shadow.camera.far = 10;
-
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-
-        directionalLight.shadow.bias = -0.002;
 
       }
 
@@ -324,8 +447,8 @@
       function initPostprocessing() {
 
         // Setup render pass
-        var renderPass = new THREE.RenderPass( scene, camera );
-        renderPass.renderToScreen = true;
+        var renderPass = new THREE.RenderPass( demoOrchestration.scenes[0].scene, camera );
+        renderPass.renderToScreen = false;
 
         // Setup depth pass
         depthMaterial = new THREE.MeshDepthMaterial();
@@ -355,7 +478,7 @@
         effectComposer = new THREE.EffectComposer( renderer );
         effectComposer.addPass(renderPass);
         effectComposer.addPass(fxaaPass);
-        //effectComposer.addPass(ssaoPass);
+        effectComposer.addPass(ssaoPass);
 
 
       }
@@ -367,40 +490,15 @@
 
         var position, target;
 
-        //Hide and show the ground plane based on camera's vertical position
-        if(ground_visible === true && camera.position.y < 0.3 ) {
-          ground_visible = false;
-          console.log('Hiding.');
-
-          var variables = { opacity: 1 };
-          var tween = new TWEEN.Tween(variables)
-            .to({ opacity: 0 }, 300)
-            .onUpdate(function() {
-                plane_material.opacity = this.opacity;
-            })
-            .start();
-
-        } else if(ground_visible === false && camera.position.y > 0.3 ) {
-          ground_visible = true;
-          console.log('Showing.');
-          var variables = { opacity: 0 };
-          var tween = new TWEEN.Tween(variables)
-            .to({ opacity: 1 }, 300)
-            .onUpdate(function() {
-                plane_material.opacity = this.opacity;
-            })
-            .start();
-
-        }
-
+        demoOrchestration.scenes[currentScene].animate();
         TWEEN.update();
-
-        controls.update();
 
         render();
       }
 
       function render() {
+        var scene = demoOrchestration.scenes[0].scene;
+
         var timer = Date.now() * 0.0005;
         camera.lookAt( cameraTarget );
 

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Elite Dekkerz</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+      body {
+        background: #f0f0f0;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      #tvoverlay {
+        display: none;
+      }
+
+      .newsscroll_wrapper {
+        background: linear-gradient(180deg, rgb(255,20,20), rgb(128,0,0));
+        padding-top: 0.6em;
+        padding-bottom: 0.6em;
+        margin-left: 1.6em;
+        margin-right: 0;
+        width: 100%;
+        bottom: 4em;
+        z-index: 100;
+        position: absolute;
+        transform: translateY(50%);
+      }
+
+      .edkzgif {
+        background: url(assets/Renderz/skull.gif) 50% 50% no-repeat;
+        background-size: auto 170%;
+        height: 4.5em;
+        width: 4.5em;
+        position: absolute;
+        bottom: 4em;
+        left: 1.5em;
+        z-index: 101;
+        border: 2px solid pink;
+        transform: translateY(50%);
+      }
+
+      .newsscroll {
+        color: white;
+        font-weight: bold;
+        font-family: "sans serif";
+        font-size: 1em;
+        white-space:nowrap;
+        overflow:hidden;
+        animation: marquee 30s linear infinite;
+        display: block;
+      }
+
+      @keyframes marquee {
+        -100% { text-indent: 100%; }
+        0%    { text-indent: 0%; }
+        100%  { text-indent: -100%; }
+      }
+
+    </style>
+  </head>
+  <body>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/16.6.0/Tween.js"></script>
+    <script src="three.js/build/three.js"></script>
+    <script src="three.js/examples/js/controls/OrbitControls.js"></script>
+    <script src="three.js/examples/js/Detector.js"></script>
+    <script src="three.js/examples/js/loaders/MTLLoader.js"></script>
+    <script src="three.js/examples/js/loaders/OBJLoader.js"></script>
+    <script src="three.js/examples/js/shaders/FXAAShader.js"></script>
+    <script src="three.js/examples/js/shaders/SSAOShader.js"></script>
+    <script src="three.js/examples/js/shaders/CopyShader.js"></script>
+
+    <script src="three.js/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="three.js/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="three.js/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="three.js/examples/js/postprocessing/MaskPass.js"></script>
+
+    <script src="webaudio-mod-player/js/player.js"></script>
+    <script src="webaudio-mod-player/js/st3.js"></script>
+    <script src="webaudio-mod-player/js/pt.js"></script>
+    <script src="webaudio-mod-player/js/ft2.js"></script>
+    <script src="webaudio-mod-player/js/utils.js"></script>
+
+    <script>
+
+
+      if (!Detector.webgl) Detector.addGetWebGLMessage();
+
+
+      // Initialise variables
+      var depthMaterial, effectComposer, depthRenderTarget;
+      var fxaaPass, ssaoPass;
+      var group;
+      var depthScale = 1.0;
+
+      var postprocessing = { enabled : true, renderMode: 0 };
+
+      var container;
+
+      var camera, controls, cameraTarget, scene, renderer;
+
+      // For hiding the ground plane
+      var ground_visible = true;
+      var ground_animating = false;
+
+      var skull, janoviina;
+
+      init();
+      script();
+      animate();
+
+      function init() {
+        window.setTimeout(function() {
+          var player = new Modplayer();
+          player.createContext();
+          player.setautostart(true);
+          player.setamigamodel(500);
+          player.load("oispaes.mod");
+          player.repeat = true;
+          //player.play();
+        }, 300);
+
+        container = document.createElement( 'div' );
+        document.body.appendChild( container );
+
+        camera = new THREE.PerspectiveCamera( 35, window.innerWidth / window.innerHeight, 1, 15 );
+        camera.position.set( 0, 1.4, -6 );
+
+        // Where to look
+        cameraTarget = new THREE.Vector3( 0, 0, 0 );
+
+        scene = new THREE.Scene();
+
+        scene.fog = new THREE.Fog( new THREE.Color(0,0,0), 10, 30 );
+        var fogColor = {r: 0, g: 0, b: 0};
+        var fogTween = new TWEEN.Tween(fogColor)
+          .to({r: 0.5, g: 0.4, b: 0.2}, 2000)
+          .easing(TWEEN.Easing.Cubic.Out)
+          .onUpdate(function(){
+            scene.fog.color.fromArray([fogColor.r, fogColor.g, fogColor.b]);
+            renderer.setClearColor( scene.fog.color );
+          })
+          .delay(1000)
+          .start();
+
+        // Ground plane
+        plane_material = new THREE.MeshPhongMaterial( { color: 0x666666, specular: 0xffffff,  opacity: 1.0, transparent: true, shininess: 100 } );
+
+        var plane = new THREE.Mesh(new THREE.PlaneBufferGeometry( 4, 4 ), plane_material);
+        plane.rotation.x = -Math.PI/2;
+        plane.position.y = -1;
+        scene.add( plane );
+
+        plane.receiveShadow = true;
+
+        var material = new THREE.MeshPhongMaterial( { color: 0x909090, specular: 0x333333, shininess: 20 } );
+
+        var lazerBeamMaterial = new THREE.MeshBasicMaterial( { color: 0xFFAA00, transparent: true, opacity: 0.5 } );
+        var textMaterial = new THREE.MeshPhongMaterial( { color: 0x0044FF, specular: 0xFFFFFF, shininess: 100} );
+        var skullMaterial = new THREE.MeshBasicMaterial( { color: 0x00FF00 } );
+        var gogglesMaterial = new THREE.MeshPhongMaterial( { color: 0x040404, specular: 0xFFFFFF, shininess: 50} );
+
+        var manager = new THREE.LoadingManager();
+
+        var mtlLoader = new THREE.MTLLoader( manager );
+        mtlLoader.setPath('assets/');
+        mtlLoader.setTexturePath('assets/');
+        mtlLoader.setMaterialOptions({side: THREE.DoubleSide });
+
+        var objLoader = new THREE.OBJLoader( manager );
+        mtlLoader.load( 'elite-TRIANGULATED.mtl', function(materials) {
+          materials.preload();
+          objLoader.setMaterials(materials);
+        });
+
+        objLoader.load( 'assets/elite-TRIANGULATED.obj', function(object) {
+          object.traverse(function(child){
+            if(child instanceof THREE.Mesh) {
+              if (child.name == "Jvision_Cylinder.001_Jvision_Cylinder.001_Material.001") {
+                child.material = lazerBeamMaterial;
+              } else if (child.name == "Text_Elite_Text_Elite_Material.003") {
+                child.material = textMaterial;
+              } else if (child.name == "Skull_Cube.002_Skull_Cube.002_Material.002") {
+                child.material = skullMaterial;
+              } else if (child.name == "zoomies_Cube_zoomies_Cube_Material.004") {
+                child.material = gogglesMaterial;
+              }
+            }
+          });
+          object.position.y = 0;
+          var scale = 0.5;
+          object.scale.set( scale, scale, scale );
+          scene.add( object );
+          skull = object;
+        });
+
+        var jsonLoader = new THREE.ObjectLoader( manager );
+        jsonLoader.load('assets/jaloviina.json', function (object) {
+          object.position.y = 3;
+          object.position.z = 0.5;
+          object.scale.set(0.3,0.3,0.3);
+          //scene.add(object);
+        /*  var coords = {y:3};
+          var tween = new TWEEN.Tween(coords)
+            .to({y: -1}, 1300)
+            .onUpdate(function(){
+              object.position.y = coords.y;
+            })
+            .easing(TWEEN.Easing.Bounce.Out)
+            .delay(3600)
+            .start();*/
+            janoviina = object;
+        });
+
+        // Lights
+
+        window.setTimeout(function() {
+          var spotLight = new THREE.SpotLight( 0xddddff, 5, 10, Math.PI/8, 0.5 );
+          spotLight.position.set(0, 2, -2.5);
+          spotLight.target.position.set(0,0,-0.5);
+
+          spotLight.castShadow = true;
+
+          spotLight.shadow.mapSize.width = 1024;
+          spotLight.shadow.mapSize.height = 1024;
+
+          spotLight.shadow.camera.near = 500;
+          spotLight.shadow.camera.far = 4000;
+          spotLight.shadow.camera.fov = 30;
+
+          scene.add(spotLight.target);
+          scene.add(spotLight);
+
+        }, 3000);
+
+        // Renderer
+        renderer = new THREE.WebGLRenderer( { antialias: true } );
+        renderer.setClearColor( scene.fog.color );
+        renderer.setPixelRatio( window.devicePixelRatio );
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+        renderer.gammaInput = true;
+        renderer.gammaOutput = true;
+
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.renderReverseSided = false;
+
+        // Init postprocessing
+        initPostprocessing();
+
+        container.appendChild( renderer.domElement );
+
+        // Controls
+        controls = new THREE.OrbitControls( camera, renderer.domElement );
+        controls.enableZoom = true;
+        controls.minDistance = 1.9;
+        controls.maxDistance = 10;
+
+        // Resize event
+        window.addEventListener( 'resize', onWindowResize, false );
+
+      }
+
+      function renderModeChange( value ) {
+
+        if (value == 0) {
+          // Framebuffer
+          ssaoPass.uniforms[ 'onlyAO' ].value = false;
+
+        } else if (value == 1) {
+          // onlyAO
+          ssaoPass.uniforms[ 'onlyAO' ].value = true;
+
+        } else {
+          console.error( "Not define renderModeChange type: " + value );
+
+        }
+
+      }
+
+      function addShadowedLight( x, y, z, color, intensity ) {
+
+        var directionalLight = new THREE.DirectionalLight( color, intensity );
+        directionalLight.position.set( x, y, z );
+        scene.add( directionalLight );
+
+        directionalLight.castShadow = true;
+
+        var d = 1;
+        directionalLight.shadow.camera.left = -d;
+        directionalLight.shadow.camera.right = d;
+        directionalLight.shadow.camera.top = d;
+        directionalLight.shadow.camera.bottom = -d;
+
+        directionalLight.shadow.camera.near = 0.1;
+        directionalLight.shadow.camera.far = 10;
+
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+
+        directionalLight.shadow.bias = -0.002;
+
+      }
+
+      function onWindowResize() {
+
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize( width, height );
+
+        // Resize renderTargets
+        ssaoPass.uniforms[ 'size' ].value.set( width, height );
+        fxaaPass.uniforms['resolution'].value.set(1 / width, 1 / height);
+
+        var pixelRatio = renderer.getPixelRatio();
+        var newWidth  = Math.floor( width / pixelRatio ) || 1;
+        var newHeight = Math.floor( height / pixelRatio ) || 1;
+
+        depthRenderTarget.setSize( newWidth, newHeight );
+        effectComposer.setSize( newWidth, newHeight );
+
+      }
+
+      function initPostprocessing() {
+
+        // Setup render pass
+        var renderPass = new THREE.RenderPass( scene, camera );
+        renderPass.renderToScreen = true;
+
+        // Setup depth pass
+        depthMaterial = new THREE.MeshDepthMaterial();
+        depthMaterial.depthPacking = THREE.RGBADepthPacking;
+        depthMaterial.blending = THREE.NoBlending;
+
+        depthRenderTarget = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+
+        // FXAA
+        fxaaPass = new THREE.ShaderPass( THREE.FXAAShader );
+        fxaaPass.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
+        fxaaPass.renderToScreen = false;
+
+        // SSAO
+        ssaoPass = new THREE.ShaderPass( THREE.SSAOShader );
+        ssaoPass.renderToScreen = true;
+
+        ssaoPass.uniforms[ "tDepth" ].value = depthRenderTarget.texture;
+        ssaoPass.uniforms[ 'size' ].value.set( window.innerWidth, window.innerHeight );
+        ssaoPass.uniforms[ 'cameraNear' ].value = camera.near;
+        ssaoPass.uniforms[ 'cameraFar' ].value = camera.far;
+        ssaoPass.uniforms[ 'onlyAO' ].value = ( postprocessing.renderMode == 1 );
+        ssaoPass.uniforms[ 'aoClamp' ].value = 0.7;
+        ssaoPass.uniforms[ 'lumInfluence' ].value = 0.2;
+
+        // Add passes to effect composer
+        effectComposer = new THREE.EffectComposer( renderer );
+        effectComposer.addPass(renderPass);
+        effectComposer.addPass(fxaaPass);
+        //effectComposer.addPass(ssaoPass);
+
+
+      }
+
+      function skull_jump(obj,v) {
+        var gravity = 9.8;
+        var start = {t: 0};
+        var flight_time = {t:2 * v / gravity};
+
+        var flight = new TWEEN.Tween(start).to(flight_time, flight_time.t * 1000).onUpdate(function() {
+              obj.position.y = 0 + start.t * v - gravity * 0.5 * start.t * start.t;
+        });
+
+        var s = obj.scale;
+        var scale = {x: s.x, y: s.y, z: s.z};
+        var normal = {x: s.x, y: s.y, z: s.z};
+        var flat = {x: 1.3 * s.x, y: 0.7 * s.y, z:1.3 * s.z};
+        var stretch = {x: 0.7 * s.x, y: 1.3 * s.y, z:0.7 * s.z};
+
+        var twine_up = new TWEEN.Tween(scale).to(flat, 100).onUpdate(function() {
+              obj.scale.set(scale.x, scale.y, scale.z);
+        });
+        var release = new TWEEN.Tween(scale).to(stretch, 100).onUpdate(function() {
+              obj.scale.set(scale.x, scale.y, scale.z);
+        });
+        var norm = new TWEEN.Tween(scale).to(normal, 100).onUpdate(function() {
+              obj.scale.set(scale.x, scale.y, scale.z);
+        });
+        var touch_down = new TWEEN.Tween(scale).to(flat, 100).onUpdate(function() {
+              obj.scale.set(scale.x, scale.y, scale.z);
+        });
+
+        release.onComplete(function() {norm.start();});
+        twine_up.onComplete(function() {flight.start(); release.start();});
+        flight.onComplete(function() {touch_down.start();});
+        touch_down.onComplete(function() {norm.start();});
+
+        twine_up.start();
+      }
+
+      function script() {
+        window.setTimeout(function(){skull_jump(skull, 5);}, 5000);
+        window.setTimeout(function(){skull_jump(skull, 8);}, 8000);
+        window.setTimeout(function(){skull_jump(skull, 11);}, 11000);
+      }
+
+      function animate() {
+
+        requestAnimationFrame( animate );
+
+        var position, target;
+
+        //Hide and show the ground plane based on camera's vertical position
+        if(ground_visible === true && camera.position.y < 0.3 ) {
+          ground_visible = false;
+          console.log('Hiding.');
+
+          var variables = { opacity: 1 };
+          var tween = new TWEEN.Tween(variables)
+            .to({ opacity: 0 }, 300)
+            .onUpdate(function() {
+                plane_material.opacity = this.opacity;
+            })
+            .start();
+
+        } else if(ground_visible === false && camera.position.y > 0.3 ) {
+          ground_visible = true;
+          console.log('Showing.');
+          var variables = { opacity: 0 };
+          var tween = new TWEEN.Tween(variables)
+            .to({ opacity: 1 }, 300)
+            .onUpdate(function() {
+                plane_material.opacity = this.opacity;
+            })
+            .start();
+
+        }
+
+        TWEEN.update();
+
+        controls.update();
+
+        render();
+      }
+
+      function render() {
+        var timer = Date.now() * 0.0005;
+        camera.lookAt( cameraTarget );
+
+        if ( postprocessing.enabled ) {
+
+          // Render depth into depthRenderTarget
+          scene.overrideMaterial = depthMaterial;
+          renderer.render( scene, camera, depthRenderTarget, true );
+
+          // Render renderPass and SSAO shaderPass
+          scene.overrideMaterial = null;
+
+          effectComposer.render();
+
+        } else {
+
+          renderer.render( scene, camera );
+
+        }
+      }
+
+    </script>
+    <div id="tvoverlay">
+      <div class="edkzgif"></div>
+      <div class="newsscroll_wrapper"><span class="newsscroll">NSA PINGATTU — ELITE DEKKERZIÄ EPÄILLÄÄN KRÄKKERÖINNISTÄ ||| VAARALLISIA HAKKEREITA — KAIKKI TILAAVAT SKROLLIA ||| KURSSIT: JLVN ↗ 0.69%, KOFF ↘ 4.6%, EDKZ ↗ 13.37% |||</span></div>
+    </div>
+  </body>
+</html>
